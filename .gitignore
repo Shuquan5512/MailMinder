@@ -1,0 +1,13 @@
+# Bytecode
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env_origin
+credentials.json
+token.json
+token.pkl
+
+# Others
+.DS_Store

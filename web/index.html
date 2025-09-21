@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>MailMinder</title>
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#111217; --card:#14161c; --ink:#e8ebf0; --muted:#98a2b3; --line:#1f2430; --accent:#7aa2ff; --good:#32d583; --warn:#f59e0b; --bad:#ef4444;
+    }
+    * { box-sizing: border-box; }
+    body{ margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Apple Color Emoji", "Segoe UI Emoji"; background:var(--bg); color:var(--ink); }
+    header{ position:sticky; top:0; z-index:5; backdrop-filter: blur(6px); background:linear-gradient(180deg, rgba(11,12,16,.9), rgba(11,12,16,.6)); border-bottom:1px solid var(--line); }
+    .container{ max-width:1100px; margin:0 auto; padding:16px; }
+    h1{ font-size:20px; margin:0 0 8px; letter-spacing:.2px; }
+    .tabs{ display:flex; gap:8px; margin-top:8px; }
+    .tab{ padding:8px 12px; border:1px solid var(--line); border-radius:10px; background:var(--card); color:var(--ink); cursor:pointer; }
+    .tab.active{ background:var(--accent); color:#0a0c12; border-color:transparent; }
+    .bar{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+    .bar .grow{ flex:1 1 280px; }
+    input, select, button{ background:var(--card); color:var(--ink); border:1px solid var(--line); border-radius:10px; padding:10px 12px; outline:none; }
+    input::placeholder{ color:var(--muted); }
+    button{ cursor:pointer; }
+    .btn{ background:#1a1f2b; border-color:#2a3040; }
+    .btn:hover{ border-color:#3b4357; }
+    .btn.primary{ background: var(--accent); color:#0a0c12; border-color: transparent; }
+    .btn.primary:hover{ filter:brightness(1.05); }
+    .pill{ display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border:1px solid var(--line); border-radius:999px; font-size:12px; color:var(--muted); }
+    .grid{ max-width:1100px; margin:14px auto 40px; padding:0 16px; }
+    .row{ background:var(--card); border:1px solid var(--line); border-radius:14px; padding:14px; margin:10px 0; display:grid; grid-template-columns: 1fr auto; gap:10px; }
+    .meta{ color:var(--muted); font-size:12.5px; }
+    .summary{ white-space:pre-wrap; line-height:1.45; margin-top:8px; }
+    .actions{ display:flex; gap:8px; align-items:center; }
+    .kbd{ padding:2px 6px; border:1px solid var(--line); border-radius:6px; font-size:12px; color:var(--muted); }
+    .empty{ color:var(--muted); padding:30px; text-align:center; border:1px dashed var(--line); border-radius:14px; background:rgba(20,22,28,.4); }
+    .footer{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 0 28px; color:var(--muted); }
+    .link{ color:var(--accent); text-decoration:none; }
+    .note{ margin-top:8px; color:var(--muted); }
+    .badge{ font-size:11px; padding:2px 6px; border-radius:8px; border:1px solid var(--line); color:var(--muted); }
+    .badge.green{ color:#22c55e; border-color:#174c36; background:#0d2d20; }
+    .badge.orange{ color:#f59e0b; border-color:#4a3717; background:#2a1f0a; }
+    .badge.gray{ color:#a1a1aa; }
+    .toggle{ appearance:none; width:36px; height:22px; background:#2a3040; border-radius:999px; position:relative; outline:none; border:1px solid var(--line); cursor:pointer; }
+    .toggle:before{ content:""; position:absolute; width:16px; height:16px; border-radius:50%; background:#afb6c9; top:2px; left:2px; transition:all .2s; }
+    .toggle:checked{ background:#1f7a4e; }
+    .toggle:checked:before{ left:16px; background:#e8fff3; }
+    .right{ text-align:right; }
+    /* Action items UI */
+    .ai-wrap{ margin-top:10px; border-top:1px dashed var(--line); padding-top:10px; }
+    .ai-head{ display:flex; align-items:center; gap:10px; margin-bottom:6px; }
+    .ai-list{ list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:6px; }
+    .ai-item{ display:grid; grid-template-columns: 1fr auto auto; gap:8px; align-items:center; background:rgba(255,255,255,0.02); border:1px solid var(--line); border-radius:10px; padding:8px 10px; }
+    .ai-title{ color:var(--ink); }
+    .ai-title.done{ color:var(--muted); text-decoration:line-through; }
+    .ai-ctrl{ display:flex; gap:8px; align-items:center; }
+    .ai-add{ display:flex; gap:8px; margin-top:8px; }
+    .hidden{ display:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="container">
+      <h1>MailMinder</h1>
+      <div class="bar">
+        <input id="api" class="grow" placeholder="API base (e.g. http://YOUR_VM_IP:8080)"/>
+        <input id="key" class="grow" placeholder="API key (optional)"/>
+        <button id="save" class="btn">Save</button>
+        <button id="poll" class="btn primary">Poll now</button>
+      </div>
+      <div class="tabs">
+        <button id="tab-inbox" class="tab active">Inbox</button>
+        <button id="tab-actions" class="tab">Action Items</button>
+      </div>
+      <div class="bar" style="margin-top:8px" id="filters-inbox">
+        <input id="q" class="grow" placeholder="Search subject / sender / summary"/>
+        <input id="newer" type="date"/>
+        <select id="minimp">
+          <option value="0">All importance</option>
+          <option value="1">Importance ≥ 1</option>
+          <option value="2">Importance ≥ 2</option>
+          <option value="3">Importance ≥ 3</option>
+        </select>
+        <select id="isread">
+          <option value="all">All</option>
+          <option value="0">Unread</option>
+          <option value="1">Read</option>
+        </select>
+        <select id="sort">
+          <option value="received_at">Sort: Date</option>
+          <option value="importance">Sort: Importance</option>
+        </select>
+        <select id="order">
+          <option value="desc">Desc</option>
+          <option value="asc">Asc</option>
+        </select>
+        <select id="limit">
+          <option>25</option>
+          <option>50</option>
+          <option>100</option>
+        </select>
+        <button id="refresh" class="btn">Refresh</button>
+      </div>
+
+      <div class="bar hidden" style="margin-top:8px" id="filters-actions">
+        <select id="ai_done">
+          <option value="0">Open only</option>
+          <option value="1">Done only</option>
+          <option value="">All</option>
+        </select>
+        <select id="ai_minimp">
+          <option value="0">All importance</option>
+          <option value="1">Importance ≥ 1</option>
+          <option value="2">Importance ≥ 2</option>
+          <option value="3">Importance ≥ 3</option>
+        </select>
+        <button id="ai_refresh" class="btn">Refresh</button>
+      </div>
+      <div class="note" id="note"></div>
+    </div>
+  </header>
+
+  <main class="grid">
+    <div id="inbox-view">
+      <div id="list"></div>
+      <div class="footer">
+        <div id="pginfo">0–0 / 0</div>
+        <div>
+          <button id="prev" class="btn">Prev</button>
+          <button id="next" class="btn">Next</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="actions-view" class="hidden">
+      <div id="ai-list-wrap"></div>
+    </div>
+  </main>
+
+<script>
+const DEFAULT_API = "http://127.0.0.1:8080"; // ← change if your VM IP/port changes
+const DEFAULT_KEY = "efa1fb8184ef49649b0fae430d800472daa3840b116cfb0b"; // optional API key
+const $ = (id)=>document.getElementById(id);
+const state = { offset: 0, total: 0 };
+
+// Tabs
+function setTab(tab){
+  const inbox = tab === 'inbox';
+  $('tab-inbox').classList.toggle('active', inbox);
+  $('tab-actions').classList.toggle('active', !inbox);
+  $('inbox-view').classList.toggle('hidden', !inbox);
+  $('filters-inbox').classList.toggle('hidden', !inbox);
+  $('actions-view').classList.toggle('hidden', inbox);
+  $('filters-actions').classList.toggle('hidden', inbox);
+  if (!inbox) loadAllActions();
+}
+
+// Load saved config
+(function initConfig(){
+  const api = localStorage.getItem('MM_API') || DEFAULT_API;
+  const key = localStorage.getItem('MM_KEY') || DEFAULT_KEY;
+  $('api').value = api; $('key').value = key;
+})();
+
+function setNote(msg){ $('note').textContent = msg || ''; }
+
+function apiBase(){ const v = $('api').value.trim(); return v.replace(/\/$/, ''); }
+function keyHeader(){ const k = $('key').value.trim(); return k? { 'x-api-key': k } : {}; }
+
+async function apiFetch(path, opts={}){
+  const res = await fetch(apiBase()+path, {
+    ...opts,
+    headers: { 'Content-Type': 'application/json', ...(opts.headers||{}), ...keyHeader() }
+  });
+  if (!res.ok){
+    const txt = await res.text().catch(()=>res.statusText);
+    throw new Error(res.status+': '+txt);
+  }
+  const ct = res.headers.get('content-type')||'';
+  return ct.includes('application/json')? res.json() : res.text();
+}
+
+function fmtDate(s){ try{ return new Date(s).toLocaleString(); }catch{ return s||''; } }
+
+function importanceBadge(n,label){
+  const map = {3:['High','orange'],2:['Normal','green'],1:['Low','gray'],0:['—','gray']};
+  const [txt,cls] = map[n]||['?', 'gray'];
+  return `<span class="badge ${cls}" title="${label||''}">${txt}</span>`
+}
+
+async function pollNow(){
+  setNote('Polling…');
+  try{
+    const r = await apiFetch('/api/poll', {method:'POST'});
+    setNote(`Polled: processed ${r.processed} @ ${new Date().toLocaleTimeString()}`);
+    await load();
+  }catch(e){ setNote('Poll failed: '+e.message); }
+}
+
+async function load(){
+  const params = new URLSearchParams();
+  const q = $('q').value.trim(); if (q) params.set('q', q);
+  const newer = $('newer').value; if (newer) params.set('newer_than', newer);
+  params.set('min_importance', $('minimp').value);
+  params.set('limit', $('limit').value);
+  params.set('offset', state.offset);
+  params.set('sort', $('sort').value);
+  params.set('order', $('order').value);
+  const isR = $('isread').value; if (isR && isR !== 'all') params.set('is_read', isR);
+
+  try{
+    const data = await apiFetch('/api/messages?'+params.toString());
+    state.total = data.total||0;
+    renderList(data.items||[]);
+    const from = data.items?.length? state.offset+1 : 0;
+    const to = state.offset + (data.items?.length||0);
+    $('pginfo').textContent = `${from}–${to} / ${state.total}`;
+    setNote('');
+  }catch(e){ setNote('Load failed: '+e.message); }
+}
+
+function renderList(items){
+  const list = $('list');
+  if (!items.length){
+    list.innerHTML = `<div class="empty">No results. Try clearing filters or clicking <span class="kbd">Refresh</span>.</div>`;
+    return;
+  }
+  list.innerHTML = items.map(m => rowTpl(m)).join('');
+  // attach handlers
+  for (const m of items){
+    const tid = m.id;
+    const t = $('t_'+tid); if (t) t.onchange = ()=> toggleRead(tid, t.checked);
+    const sel = $('imp_'+tid); if (sel) sel.onchange = ()=> setOverride(tid, sel.value);
+  }
+}
+
+function rowTpl(m){
+  const read = !!m.is_read;
+  const impSel = `
+    <select id="imp_${m.id}" title="Importance override" style="min-width:110px">
+      <option value="" ${m.importance_override==null?'selected':''}>Override: none</option>
+      <option value="0" ${m.importance_override===0?'selected':''}>0</option>
+      <option value="1" ${m.importance_override===1?'selected':''}>1</option>
+      <option value="2" ${m.importance_override===2?'selected':''}>2</option>
+      <option value="3" ${m.importance_override===3?'selected':''}>3</option>
+    </select>`;
+  return `
+    <div class="row">
+      <div>
+        <div class="actions" style="gap:10px; flex-wrap:wrap;">
+          <label class="actions" style="gap:8px">
+            <input id="t_${m.id}" type="checkbox" class="toggle" ${read?'checked':''} />
+            <span class="meta">${read? 'Read' : 'Unread'}</span>
+          </label>
+          ${importanceBadge(m.importance, m.importance_label)}
+          ${impSel}
+          ${m.gmail_permalink? `<a class="link" href="${m.gmail_permalink}" target="_blank" rel="noopener">Open in Gmail ↗</a>`: ''}
+          <span class="pill">${m.from||''}</span>
+          <span class="pill">${m.ts? fmtDate(m.ts):''}</span>
+          <button class="btn" onclick="toggleActions('${m.id}')">Actions</button>
+        </div>
+        <div style="margin-top:6px; font-weight:600;">${escapeHtml(m.subject||'(no subject)')}</div>
+        <div class="summary">${escapeHtml(m.summary_md||'')}</div>
+        <div id="aiw_${m.id}" class="ai-wrap hidden">
+          <div class="ai-head">
+            <span class="meta">Action items</span>
+            <span class="kbd" id="aic_${m.id}">0</span>
+            <button class="btn" onclick="reloadActions('${m.id}')">Refresh</button>
+          </div>
+          <ul id="ail_${m.id}" class="ai-list"></ul>
+          <div class="ai-add">
+            <input id="ain_${m.id}" class="grow" placeholder="Add an action item..."/>
+            <select id="ais_${m.id}">
+              <option value="2" selected>Imp 2</option>
+              <option value="3">Imp 3</option>
+              <option value="1">Imp 1</option>
+              <option value="0">Imp 0</option>
+            </select>
+            <button class="btn primary" onclick="addAction('${m.id}')">Add</button>
+          </div>
+        </div>
+      </div>
+      <div class="right">
+        <span class="meta">${m.id}</span>
+      </div>
+    </div>`
+}
+
+function actionItemTpl(mid, ai){
+  const chk = `<input type="checkbox" ${ai.is_done? 'checked':''} onchange="setActionDone('${ai.id}', this.checked, '${mid}')"/>`;
+  const cls = ai.is_done? 'ai-title done':'ai-title';
+  const sel = `
+    <select onchange="setActionImportance('${ai.id}', this.value, '${mid}')">
+      <option value="3" ${ai.importance===3?'selected':''}>3</option>
+      <option value="2" ${ai.importance===2?'selected':''}>2</option>
+      <option value="1" ${ai.importance===1?'selected':''}>1</option>
+      <option value="0" ${ai.importance===0?'selected':''}>0</option>
+    </select>`;
+  return `<li class="ai-item">
+    <div class="${cls}">${escapeHtml(ai.title)}</div>
+    <div class="ai-ctrl">${chk} <span class="meta">Done</span></div>
+    <div class="ai-ctrl">${sel} <button class="btn" onclick="deleteAction('${ai.id}', '${mid}')">Delete</button></div>
+  </li>`
+}
+
+async function toggleRead(id, val){
+  try{
+    await apiFetch('/api/messages/'+encodeURIComponent(id), {
+      method:'PATCH', body: JSON.stringify({ is_read: !!val })
+    });
+    setNote(`Updated read → ${val}`);
+  }catch(e){ setNote('Update failed: '+e.message); }
+}
+
+function toggleActions(mid){
+  const wrap = document.getElementById('aiw_'+mid);
+  if (!wrap) return;
+  const wasHidden = wrap.classList.contains('hidden');
+  wrap.classList.toggle('hidden');
+  if (wasHidden){ reloadActions(mid); }
+}
+
+async function reloadActions(mid){
+  try{
+    const data = await apiFetch('/api/action-items?message_id='+encodeURIComponent(mid)+'&limit=100');
+    const list = document.getElementById('ail_'+mid);
+    const cnt = document.getElementById('aic_'+mid);
+    list.innerHTML = (data.items||[]).map(ai => actionItemTpl(mid, ai)).join('') || `<li class=\"meta\">No action items.</li>`;
+    cnt.textContent = data.total||0;
+  }catch(e){ setNote('Load actions failed: '+e.message); }
+}
+
+async function addAction(mid){
+  const inp = document.getElementById('ain_'+mid);
+  const sel = document.getElementById('ais_'+mid);
+  const title = (inp.value||'').trim();
+  if (!title) return;
+  try{
+    await apiFetch('/api/action-items', {
+      method:'POST',
+      body: JSON.stringify({ message_id: mid, title, importance: Number(sel.value)||2 })
+    });
+    inp.value = '';
+    await reloadActions(mid);
+  }catch(e){ setNote('Add failed: '+e.message); }
+}
+
+async function setActionDone(aiId, done, mid){
+  try{
+    await apiFetch('/api/action-items/'+encodeURIComponent(aiId), {
+      method:'PATCH', body: JSON.stringify({ is_done: !!done })
+    });
+    await reloadActions(mid);
+  }catch(e){ setNote('Update failed: '+e.message); }
+}
+
+async function setActionImportance(aiId, imp, mid){
+  try{
+    await apiFetch('/api/action-items/'+encodeURIComponent(aiId), {
+      method:'PATCH', body: JSON.stringify({ importance: Number(imp) })
+    });
+    await reloadActions(mid);
+  }catch(e){ setNote('Update failed: '+e.message); }
+}
+
+async function deleteAction(aiId, mid){
+  try{
+    await apiFetch('/api/action-items/'+encodeURIComponent(aiId), { method:'DELETE' });
+    await reloadActions(mid);
+  }catch(e){ setNote('Delete failed: '+e.message); }
+}
+
+// Global Action Items view
+async function loadAllActions(){
+  const done = $('ai_done').value; // "0" open, "1" done, "" all
+  const minimp = $('ai_minimp').value;
+  const qs = new URLSearchParams();
+  if (done !== '') qs.set('is_done', done);
+  if (minimp !== '0') qs.set('min_importance', minimp);
+  qs.set('limit', '200');
+
+  try{
+    const data = await apiFetch('/api/action-items?'+qs.toString());
+    const wrap = $('ai-list-wrap');
+    if (!data.items?.length){
+      wrap.innerHTML = `<div class="empty">No action items match your filters.</div>`;
+      return;
+    }
+    wrap.innerHTML = data.items.map(ai => `
+      <div class="row">
+        <div>
+          <div class="actions" style="gap:10px; flex-wrap:wrap;">
+            <label class="actions" style="gap:8px">
+              <input type="checkbox" ${ai.is_done?'checked':''} onchange="setActionDone('${ai.id}', this.checked, '${ai.message_id}')"/>
+              <span class="meta">${ai.is_done? 'Done' : 'Open'}</span>
+            </label>
+            <select onchange="setActionImportance('${ai.id}', this.value, '${ai.message_id}')">
+              <option value="3" ${ai.importance===3?'selected':''}>3</option>
+              <option value="2" ${ai.importance===2?'selected':''}>2</option>
+              <option value="1" ${ai.importance===1?'selected':''}>1</option>
+              <option value="0" ${ai.importance===0?'selected':''}>0</option>
+            </select>
+            <span class="pill">Msg: ${ai.message_id}</span>
+          </div>
+          <div class="summary">${escapeHtml(ai.title)}</div>
+        </div>
+      </div>
+    `).join('');
+  }catch(e){ setNote('Failed to load actions: '+e.message); }
+}
+
+function escapeHtml(s){ return (s||'').replace(/[&<>"']/g, c=>({
+  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+}[c])); }
+
+// Wire controls
+$('save').onclick = ()=>{ localStorage.setItem('MM_API', $('api').value.trim()); localStorage.setItem('MM_KEY', $('key').value.trim()); setNote('Saved API config.'); };
+$('refresh').onclick = ()=>{ state.offset = 0; load(); };
+$('poll').onclick = pollNow;
+$('next').onclick = ()=>{ state.offset = Math.min(state.offset + Number($('limit').value), Math.max(0, state.total-1)); load(); };
+$('prev').onclick = ()=>{ state.offset = Math.max(0, state.offset - Number($('limit').value)); load(); };
+$('tab-inbox').onclick = ()=> setTab('inbox');
+$('tab-actions').onclick = ()=> setTab('actions');
+
+// Auto-load on first paint
+window.addEventListener('DOMContentLoaded', ()=>{ load(); setTab('inbox'); });
+</script>
+</body>
+</html>
